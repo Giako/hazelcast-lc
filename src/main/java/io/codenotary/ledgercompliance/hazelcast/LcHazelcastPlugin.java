@@ -2,7 +2,6 @@ package io.codenotary.ledgercompliance.hazelcast;
 
 import com.hazelcast.client.HazelcastClient;
 import com.hazelcast.client.config.ClientConfig;
-import com.hazelcast.core.EntryEvent;
 import com.hazelcast.core.HazelcastInstance;
 import com.hazelcast.map.IMap;
 import com.hazelcast.map.listener.EntryAddedListener;
@@ -25,9 +24,9 @@ public class LcHazelcastPlugin {
 
         final LedgerComplianceClient lcClient = LedgerComplianceClient.newBuilder()
                 .setRootHolder(rootHolder)
-                .setServerUrl("ppp.immudb.io")
+                .setServerUrl("localhost")
                 .setServerPort(33080)
-                .setApiKey("mhyavifptrfrkrojvruqgqgpuzmghzwalksm")
+                .setApiKey("byosbjjujahizusnraxixjgjktaxzjmxejjb")
                 .build();
 
         ClientConfig config = new ClientConfig();
@@ -35,21 +34,19 @@ public class LcHazelcastPlugin {
         HazelcastInstance hazelcastInstanceClient = HazelcastClient.newHazelcastClient(config);
         IMap<Long, String> map = hazelcastInstanceClient.getMap("data");
 
-        map.addEntryListener(new EntryAddedListener<Long, String>() {
+        map.addEntryListener((EntryAddedListener<Long, String>) entryEvent -> {
+            try {
+                String key = Long.toString(entryEvent.getKey());
+                lcClient.safeSet(key, entryEvent.getValue().getBytes());
+                String value = new String(lcClient.safeGet(key), StandardCharsets.UTF_8);
 
-            public void entryAdded(EntryEvent<Long, String> entryEvent) {
-                try {
-                    String key = Long.toString(entryEvent.getKey());
-                    lcClient.safeSet(key, entryEvent.getValue().getBytes());
-                    String value = new String(lcClient.safeGet(key), StandardCharsets.UTF_8);
-
-                    System.out.println("Inserted key in HC and LC. Retrieving from LC: ");
-                    System.out.printf("%s: %s%n%n", key , value);
-                } catch (VerificationException e) {
-                    e.printStackTrace();
-                }
+                System.out.println("Inserted key in HC and LC. Retrieving from LC: ");
+                System.out.printf("%s: %s%n%n", key , value);
+            } catch (VerificationException e) {
+                e.printStackTrace();
             }
         }, true);
 
+        Runtime.getRuntime().addShutdownHook(new Thread(lcClient::shutdown));
     }
 }
